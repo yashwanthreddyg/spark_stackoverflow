@@ -1,22 +1,26 @@
 // spark imports
-import org.apache.spark._
-import org.apache.spark.sql._
-
+import org.apache.spark.*
+import org.apache.spark.sql.*
 import scala3encoders.derivation.{Deserializer, Serializer}
-import org.apache.spark.sql.catalyst.DeserializerBuildHelper.createDeserializerForTypesSupportValueOf
-import org.apache.spark.sql.catalyst.DeserializerBuildHelper.createDeserializerForScalaBigInt
 import org.apache.spark.sql.catalyst.expressions.Expression
-import org.apache.spark.sql.types.{DataType, LongType, DecimalType}
-import scala3encoders.encoder
+import org.apache.spark.sql.catalyst.expressions.objects.{Invoke, StaticInvoke}
+import org.apache.spark.sql.types.{DataType, LongType, ObjectType}
 
 given Deserializer[BigInt] with
   def inputType: DataType = LongType
   def deserialize(path: Expression): Expression =
-    createDeserializerForScalaBigInt(path)
+    StaticInvoke(
+      BigInt.getClass,
+      ObjectType(classOf[BigInt]),
+      "apply",
+      path :: Nil,
+      returnNullable = false
+    )
 
 given Serializer[BigInt] with
-  def inputType: DataType = LongType
-  def serialize(inputObject: Expression): Expression = inputObject
+  def inputType: DataType = ObjectType(classOf[BigInt])
+  def serialize(inputObject: Expression): Expression =
+    Invoke(inputObject, "longValue", LongType, returnNullable = false)
 
 object spark1 {
 
@@ -26,7 +30,7 @@ object spark1 {
       .config("spark.master", "local")
       .appName("SparkTestApp")
       .getOrCreate()
-    import spark.sqlContext.implicits._
+    import scala3encoders.given
     val dataFolder = "../Spark-The-Definitive-Guide"
 
     case class Flight(DEST_COUNTRY_NAME: String,
